@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// shamiri Fellows - lay providers who conduct therapy sessions
+model Fellow {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  age       Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+
+  @@map("fellows")
+}
+
+// Therapy Sessions conducted by Fellows
+model Session {
+  id         String   @id @default(cuid())
+  groupId    String // Group identifier for the therapy session
+  date       DateTime @default(now())
+  transcript String   @db.Text // Full session transcript (40-60 min)
+  duration   Int // Duration in minutes
+  concept    String // e.g., "Growth Mindset", "Gratitude", etc.
+
+  status SessionStatus @default(PROCESSED)
+
+  fellowId String
+  fellow   Fellow     @relation(fields: [fellowId], references: [id], onDelete: Cascade)
+  analysis Analysis?
+  feedback Feedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fellowId])
+  @@index([status])
+  @@index([date])
+  @@map("sessions")
+}
+
+// AI-generated analysis for each session
+model Analysis {
+  id String @id @default(cuid())
+
+  summary String @db.Text
+
+  // quantitative scores with justifications
+  conceptTaught        Boolean // did Fellow teach the assigned concept?
+  conceptScore         Int // score
+  conceptJustification String  @db.Text
+
+  engagementScore         Int // how engaged were participants?
+  engagementJustification String @db.Text
+
+  techniqueScore         Int // quality of therapeutic techniques 
+  techniqueJustification String @db.Text
+
+  // risk detection (with risk quote if detected and explanation of the risk)
+  riskLevel  RiskLevel @default(SAFE)
+  riskQuote  String?   @db.Text 
+  riskReason String?   @db.Text
+
+  // AI metadata i.e model infor used i'm using openAi gpt-4
+  generatedAt    DateTime @default(now())
+  modelUsed      String 
+  processingTime Int 
+
+  sessionId String  @unique
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([riskLevel])
+  @@map("analyses")
+}
+
+// supervisor feedback and overrides
+model Feedback {
+  id String @id @default(cuid())
+
+  // supervisor validation (with validated or rejected AI output)
+  validated Boolean 
+  rejected  Boolean @default(false) 
+
+  // supervisor override for session status or risk assessment
+  overrideStatus SessionStatus? 
+  overrideRisk   RiskLevel?
+
+  // supervisor notes
+  notes          String? @db.Text
+  supervisorName String
+
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@map("feedback")
+}
+
+// session status Enums for AI analysis
+enum SessionStatus {
+  PROCESSED // completed, no issues
+  FLAGGED_FOR_REVIEW // needs supervisor review
+  SAFE // confirmed safe
+  NEEDS_FOLLOWUP // additional action required
+}
+
+// risk level either SAFE or RISK
+enum RiskLevel {
+  SAFE 
+  RISK 
+}
