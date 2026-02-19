@@ -6,7 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// fellows - lay providers who conduct therapy sessions
+// fellows who conduct therapy sessions
 model Fellow {
   id        String   @id @default(cuid())
   name      String
@@ -108,7 +108,7 @@ model Feedback {
   @@map("feedback")
 }
 
-// session status Enums for AI analysis
+// session status enums for AI analysis
 enum SessionStatus {
   PROCESSED // completed, no issues
   FLAGGED_FOR_REVIEW // needs supervisor review
