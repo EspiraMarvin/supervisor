@@ -903,7 +903,7 @@ async function main() {
         riskQuote: riskTranscript?.riskQuote || '',
         riskReason: riskTranscript?.riskReason || '',
         generatedAt: new Date(),
-        modelUsed: 'gpt-4o',
+        modelUsed: 'gpt-5.1',
         processingTime: 3500,
       },
     });
@@ -952,7 +952,7 @@ async function main() {
         riskQuote: null,
         riskReason: null,
         generatedAt: new Date(),
-        modelUsed: 'gpt-4o',
+        modelUsed: 'gpt-5.1',
         processingTime: 2800,
       },
     });
