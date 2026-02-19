@@ -45,24 +45,29 @@ model Session {
   @@map("sessions")
 }
 
-// AI-generated analysis for each session
+// AI-generated analysis for each session with shamiri grading rubric (1-3)
 model Analysis {
   id String @id @default(cuid())
 
-  summary String @db.Text
+  overallSummary String @db.Text
 
-  // quantitative scores with justifications
-  conceptTaught        Boolean // did Fellow teach the assigned concept?
-  conceptScore         Int // score
-  conceptJustification String  @db.Text
+  // metric 1: content coverage 
+  contentCoverageScore         Int // 1=Missed, 2=Partial, 3=Complete
+  contentCoverageJustification String  @db.Text
+  contentCoverageQuotes        String? @db.Text
 
-  engagementScore         Int // how engaged were participants?
-  engagementJustification String @db.Text
+  // metric 2: facilitation quality
+  facilitationQualityScore         Int // 1=Poor, 2=Adequate, 3=Excellent
+  facilitationQualityJustification String  @db.Text
+  facilitationQualityQuotes        String? @db.Text
 
-  techniqueScore         Int // quality of therapeutic techniques 
-  techniqueJustification String @db.Text
+  // metric 3: protocol safety 
+  protocolSafetyScore         Int // 1=Violation, 2=Minor Drift, 3=Adherent
+  protocolSafetyJustification String  @db.Text
+  protocolSafetyQuotes        String? @db.Text
+  safetyFlag                  Boolean @default(false)
 
-  // risk detection (with risk quote if detected and explanation of the risk)
+  // risk detection (CRITICAL - separate from protocol safety)
   riskLevel  RiskLevel @default(SAFE)
   riskQuote  String?   @db.Text
   riskReason String?   @db.Text
@@ -79,6 +84,7 @@ model Analysis {
   updatedAt DateTime @updatedAt
 
   @@index([riskLevel])
+  @@index([safetyFlag])
   @@map("analyses")
 }
 

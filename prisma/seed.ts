@@ -881,23 +881,29 @@ async function main() {
     await prisma.analysis.create({
       data: {
         sessionId: riskSession.id,
-        summary:
-          'Fellow Marcus conducted a session on coping with depression, demonstrating appropriate concern and professional boundaries. A participant disclosed suicidal ideation, which the Fellow handled correctly by expressing concern and committing to connect them with professional support. The session covered behavioral activation, challenging negative thoughts, and the importance of seeking help.',
-        conceptTaught: true,
-        conceptScore: 4,
-        conceptJustification:
-          'Fellow effectively taught depression coping strategies including behavioral activation, challenging negative thoughts, maintaining routine, social connection, and self-compassion. Content was appropriate and evidence-based.',
-        engagementScore: 5,
-        engagementJustification:
-          'Participants were highly engaged, with vulnerable sharing indicating strong trust and safety in the group. Fellow created space for difficult conversations.',
-        techniqueScore: 5,
-        techniqueJustification:
-          'Fellow demonstrated excellent crisis response skills, appropriate boundary-setting, and commitment to connecting at-risk participant with professional support. Handled disclosure of suicidal ideation professionally and compassionately.',
+        overallSummary:
+          'Fellow Marcus conducted a session on coping with depression, demonstrating appropriate concern and professional boundaries. A participant disclosed suicidal ideation, which the Fellow handled correctly by expressing concern and committing to connect them with professional support.',
+        contentCoverageScore: 3,
+        contentCoverageJustification:
+          'Fellow effectively taught depression coping strategies including behavioral activation, challenging negative thoughts, maintaining routine, social connection, and self-compassion. Content was comprehensive and evidence-based.',
+        contentCoverageQuotes:
+          '"Today we\'re talking about depression and coping strategies..."\n"Behavioral activation means doing small activities even when you don\'t feel like it..."\n"Depression tells you lies: I\'m worthless, Nothing will get better, No one cares."',
+        facilitationQualityScore: 3,
+        facilitationQualityJustification:
+          'Fellow demonstrated excellent facilitation skills with warm, empathetic tone. Created safe space for vulnerable sharing and validated participant emotions. Used open-ended questions effectively.',
+        facilitationQualityQuotes:
+          '"Thank you for trusting us with that. Those thoughts are serious..."\n"Your feelings are not a burden..."\n"What do you think about these coping strategies?"',
+        protocolSafetyScore: 3,
+        protocolSafetyJustification:
+          'Fellow demonstrated excellent protocol adherence by recognizing the limits of lay provider role and immediately committing to connect at-risk participant with professional counselor. Did not attempt to provide medical advice.',
+        protocolSafetyQuotes:
+          '"These thoughts are serious, and I\'m concerned about you. Those are thoughts we need to address with professional help..."\n"After our session, I\'m going to connect you with our counselor, okay?"',
+        safetyFlag: false,
         riskLevel: RiskLevel.RISK,
         riskQuote: riskTranscript?.riskQuote || '',
         riskReason: riskTranscript?.riskReason || '',
         generatedAt: new Date(),
-        modelUsed: 'gpt-4',
+        modelUsed: 'gpt-4o',
         processingTime: 3500,
       },
     });
@@ -912,40 +918,41 @@ async function main() {
     .filter((s) => s.id !== riskSession?.id);
 
   for (const session of sessionsToAnalyze) {
+    const isPoorSession =
+      session.concept === 'Growth Mindset' && session.duration === 45;
+
     await prisma.analysis.create({
       data: {
         sessionId: session.id,
-        summary: `Fellow delivered a comprehensive session on ${session.concept}. Participants were engaged and demonstrated understanding through active participation. The Fellow used evidence-based techniques and created a safe, supportive environment for learning.`,
-        conceptTaught: true,
-        conceptScore:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? 2
-            : 5,
-        conceptJustification:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? 'Fellow covered basic growth mindset concepts but lacked depth. Explanations were superficial, examples were limited, and the Fellow struggled to elaborate when participants asked for more detail. Teaching could be significantly improved.'
-            : `Fellow demonstrated strong understanding of ${session.concept} and effectively conveyed key concepts through clear explanations, relevant examples, and interactive activities.`,
-        engagementScore:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? 3
-            : 4,
-        engagementJustification:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? "Participants asked questions showing interest, but engagement was limited by the Fellow's brief responses and lack of depth. More interactive activities and detailed explanations would improve engagement."
-            : 'Participants actively contributed, asked thoughtful questions, and engaged meaningfully with the material and activities.',
-        techniqueScore:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? 2
-            : 5,
-        techniqueJustification:
-          session.concept === 'Growth Mindset' && session.duration === 45
-            ? 'Fellow used minimal therapeutic techniques. Activities were present but underdeveloped. Missed opportunities to deepen learning and provide more comprehensive guidance. Needs improvement in facilitation skills.'
-            : 'Fellow employed appropriate therapeutic techniques including active listening, guided reflection, experiential activities, and skill-building exercises.',
+        overallSummary: isPoorSession
+          ? `Fellow delivered a basic session on ${session.concept} but lacked depth and engagement. Participants asked questions showing interest, but the Fellow's brief responses and superficial coverage limited learning. More thorough explanations and interactive activities are needed.`
+          : `Fellow delivered a comprehensive session on ${session.concept}. Participants were engaged and demonstrated understanding through active participation. The Fellow used evidence-based techniques and created a safe, supportive environment for learning.`,
+        contentCoverageScore: isPoorSession ? 2 : 3,
+        contentCoverageJustification: isPoorSession
+          ? 'Fellow mentioned growth mindset and added "yet" to statements, but explanations were superficial and rushed. Limited examples and no depth when participants asked for elaboration. Concept was introduced but not fully taught.'
+          : `Fellow clearly explained ${session.concept} with relevant examples, checked for understanding, and ensured participants could apply the concept. Comprehensive coverage with practical applications.`,
+        contentCoverageQuotes: isPoorSession
+          ? '"Growth mindset is about believing you can improve through effort..."\n"Just add \'yet\' to things. Like I can\'t do this YET..."\n"That\'s basically it."'
+          : `"Let me explain ${session.concept} clearly..."\n"Can anyone give me an example of this?"\n"How would you apply this in your own life?"`,
+        facilitationQualityScore: isPoorSession ? 2 : 3,
+        facilitationQualityJustification: isPoorSession
+          ? 'Fellow was polite but somewhat transactional. Responses to participant questions were brief without deeper engagement. Followed a script without adapting to participant needs or expanding on topics.'
+          : 'Fellow was warm and engaging, asked open-ended questions, validated participant contributions, and encouraged everyone to share. Created a safe, supportive environment for learning.',
+        facilitationQualityQuotes: isPoorSession
+          ? '"Okay..."\n"Yeah, so like, if you\'re bad at something, you can get better."\n"Does anyone have something they\'re bad at?"'
+          : '"Thank you for sharing that!"\n"That\'s a great example. What made you think of that?"\n"How does everyone feel about what we\'ve discussed?"',
+        protocolSafetyScore: 3,
+        protocolSafetyJustification:
+          'Fellow stayed focused on the assigned curriculum topic throughout the session. No medical advice, diagnoses, or unauthorized recommendations were made. Handled all discussions appropriately within the Shamiri protocol.',
+        protocolSafetyQuotes: isPoorSession
+          ? `"Today we\'re talking about ${session.concept}..."\n"Let\'s stick to what we\'re learning today."`
+          : `"This is about ${session.concept}, which is part of our Shamiri curriculum..."\n"Remember, we\'re focusing on evidence-based strategies here."`,
+        safetyFlag: false,
         riskLevel: RiskLevel.SAFE,
         riskQuote: null,
         riskReason: null,
         generatedAt: new Date(),
-        modelUsed: 'gpt-4',
+        modelUsed: 'gpt-4o',
         processingTime: 2800,
       },
     });
