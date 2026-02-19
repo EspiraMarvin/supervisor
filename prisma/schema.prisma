@@ -6,7 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// shamiri Fellows - lay providers who conduct therapy sessions
+// fellows who conduct therapy sessions
 model Fellow {
   id        String   @id @default(cuid())
   name      String
@@ -20,14 +20,14 @@ model Fellow {
   @@map("fellows")
 }
 
-// Therapy Sessions conducted by Fellows
+// therapy sessions conducted by fellows
 model Session {
   id         String   @id @default(cuid())
-  groupId    String // Group identifier for the therapy session
+  groupId    String // group identifier for the therapy session
   date       DateTime @default(now())
-  transcript String   @db.Text // Full session transcript (40-60 min)
-  duration   Int // Duration in minutes
-  concept    String // e.g., "Growth Mindset", "Gratitude", etc.
+  transcript String   @db.Text // session transcript
+  duration   Int // session in mins
+  concept    String // session topic e.g peer pressure
 
   status SessionStatus @default(PROCESSED)
 
@@ -64,13 +64,13 @@ model Analysis {
 
   // risk detection (with risk quote if detected and explanation of the risk)
   riskLevel  RiskLevel @default(SAFE)
-  riskQuote  String?   @db.Text 
+  riskQuote  String?   @db.Text
   riskReason String?   @db.Text
 
-  // AI metadata i.e model infor used i'm using openAi gpt-4
+  // AI metadata i.e model infor used i'm using openAi gpt-5
   generatedAt    DateTime @default(now())
-  modelUsed      String 
-  processingTime Int 
+  modelUsed      String
+  processingTime Int
 
   sessionId String  @unique
   session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -87,11 +87,11 @@ model Feedback {
   id String @id @default(cuid())
 
   // supervisor validation (with validated or rejected AI output)
-  validated Boolean 
-  rejected  Boolean @default(false) 
+  validated Boolean
+  rejected  Boolean @default(false)
 
   // supervisor override for session status or risk assessment
-  overrideStatus SessionStatus? 
+  overrideStatus SessionStatus?
   overrideRisk   RiskLevel?
 
   // supervisor notes
@@ -108,7 +108,7 @@ model Feedback {
   @@map("feedback")
 }
 
-// session status Enums for AI analysis
+// session status enums for AI analysis
 enum SessionStatus {
   PROCESSED // completed, no issues
   FLAGGED_FOR_REVIEW // needs supervisor review
@@ -118,6 +118,6 @@ enum SessionStatus {
 
 // risk level either SAFE or RISK
 enum RiskLevel {
-  SAFE 
-  RISK 
+  SAFE
+  RISK
 }
