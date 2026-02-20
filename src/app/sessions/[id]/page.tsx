@@ -5,12 +5,19 @@ import Link from 'next/link';
 import AnalysisCard from '@/components/AnalysisCard';
 import FeedbackForm from '@/components/FeedbackForm';
 import GenerateAnalysisButton from '@/components/GenerateAnalysisButton';
+import { requireSupervisorSession } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
 async function getSession(id: string) {
-  const session = await prisma.session.findUnique({
-    where: { id },
+  const supervisor = await requireSupervisorSession();
+  const session = await prisma.session.findFirst({
+    where: {
+      id,
+      fellow: {
+        supervisorId: supervisor.supervisorId,
+      },
+    },
     include: {
       fellow: true,
       analysis: true,
@@ -18,11 +25,14 @@ async function getSession(id: string) {
         orderBy: {
           createdAt: 'desc',
         },
+        include: {
+          supervisor: true,
+        },
       },
     },
   });
 
-  return session;
+  return { session, supervisor };
 }
 
 export default async function SessionDetailPage({
@@ -31,7 +41,9 @@ export default async function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await getSession(id);
+  const result = await getSession(id);
+  const session = result.session;
+  const supervisor = result.supervisor;
 
   if (!session) {
     notFound();
@@ -43,7 +55,7 @@ export default async function SessionDetailPage({
     <div className="min-h-screen bg-gray-50">
       {/* header */}
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex justify-between max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
               <Link
@@ -59,6 +71,16 @@ export default async function SessionDetailPage({
                 Review session transcript and AI-generated insights
               </p>
             </div>
+          </div>
+          <div className="mt-4">
+            <form action="/api/auth/logout" method="post">
+              <button
+                type="submit"
+                className="text-sm text-gray-600 hover:text-gray-900 underline "
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       </header>
@@ -185,7 +207,7 @@ export default async function SessionDetailPage({
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-sm font-medium text-gray-900">
-                          {feedback.supervisorName}
+                          {feedback.supervisor?.username || 'Supervisor'}
                         </div>
                         <div className="text-xs text-gray-500">
                           {new Date(feedback.createdAt).toLocaleString()}
@@ -244,6 +266,7 @@ export default async function SessionDetailPage({
             <FeedbackForm
               sessionId={session.id}
               currentStatus={session.status}
+              supervisorName={supervisor.username}
             />
           </div>
         </div>

@@ -1,4 +1,15 @@
 import { render, screen } from '@testing-library/react';
+
+// mock auth to avoid loading jose (ESM) in Jest environment
+jest.mock('@/lib/auth/server', () => ({
+  __esModule: true,
+  requireSupervisorSession: jest.fn(async () => ({
+    supervisorId: 'sup-1',
+    username: 'Marvin Espira',
+    email: 'espiramarvin@gmail.com',
+  })),
+}));
+
 import DashboardPage from '@/app/page';
 
 // mock Next.js Link component

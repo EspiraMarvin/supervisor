@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
+import { requireSupervisorSession } from '@/lib/auth/server';
 
 type SessionStatus =
   | 'PROCESSED'
@@ -35,11 +36,16 @@ export const dynamic = 'force-dynamic';
 
 const ITEMS_PER_PAGE = 10;
 
-async function getSessions(page: number = 1) {
+async function getSessions(supervisorId: string, page: number = 1) {
   const skip = (page - 1) * ITEMS_PER_PAGE;
 
   const [sessions, totalCount, allSessions] = await Promise.all([
     prisma.session.findMany({
+      where: {
+        fellow: {
+          supervisorId,
+        },
+      },
       skip,
       take: ITEMS_PER_PAGE,
       include: {
@@ -53,8 +59,19 @@ async function getSessions(page: number = 1) {
         date: 'desc',
       },
     }),
-    prisma.session.count(),
+    prisma.session.count({
+      where: {
+        fellow: {
+          supervisorId,
+        },
+      },
+    }),
     prisma.session.findMany({
+      where: {
+        fellow: {
+          supervisorId,
+        },
+      },
       select: {
         status: true,
       },
@@ -112,6 +129,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const supervisor = await requireSupervisorSession();
   const params = await searchParams;
   const currentPage = Number(params.page) || 1;
   const {
@@ -119,7 +137,7 @@ export default async function DashboardPage({
     totalCount,
     stats,
     currentPage: page,
-  } = await getSessions(currentPage);
+  } = await getSessions(supervisor.supervisorId, currentPage);
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const skip = (page - 1) * ITEMS_PER_PAGE;
 
@@ -136,6 +154,10 @@ export default async function DashboardPage({
               <p className="mt-1 text-sm text-gray-600">
                 Review and monitor therapy sessions conducted by Fellows
               </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Signed in as{' '}
+                <span className="font-medium">{supervisor.username}</span>
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600">
@@ -147,6 +169,14 @@ export default async function DashboardPage({
                 </span>{' '}
                 Flagged
               </div>
+              <form action="/api/auth/logout" method="post" className="ml-2">
+                <button
+                  type="submit"
+                  className="text-sm text-gray-600 hover:text-gray-900 underline"
+                >
+                  Sign out
+                </button>
+              </form>
             </div>
           </div>
         </div>
