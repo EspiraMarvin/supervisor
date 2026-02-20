@@ -845,7 +845,7 @@ async function main() {
     const fellow = fellows[i % fellows.length];
 
     // status based on risk level
-    let status = SessionStatus.PROCESSED;
+    let status: SessionStatus = SessionStatus.PROCESSED;
     if (transcript.riskLevel === RiskLevel.RISK) {
       status = SessionStatus.FLAGGED_FOR_REVIEW;
     }
