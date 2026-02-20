@@ -4,13 +4,20 @@ import { Pool } from 'pg';
 
 const prismaClientSingleton = () => {
   const databaseUrl = process.env.DATABASE_URL;
-  
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is not defined');
-  }
 
-  // Use pg adapter for all connection types
-  const pool = new Pool({ connectionString: databaseUrl });
+  // during build time, use a valid placeholder URL that won't actually connect
+  const connectionString =
+    databaseUrl ||
+    'postgresql://placeholder:placeholder@localhost:5432/placeholder';
+
+  // use pg adapter for all cases
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    // don't actually try to connect during build
+    allowExitOnIdle: true,
+  });
+
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };

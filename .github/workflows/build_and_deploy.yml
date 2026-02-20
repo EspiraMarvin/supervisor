@@ -2,13 +2,9 @@ name: Build, Lint, Test, and Deploy to Vercel
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: ['main', 'develop']
   pull_request:
-    branches:
-      - main
-      - master
+    branches: ['main', 'develop']
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -100,7 +96,7 @@ jobs:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
