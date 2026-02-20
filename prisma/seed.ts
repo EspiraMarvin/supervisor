@@ -1,6 +1,7 @@
 import { PrismaClient, SessionStatus, RiskLevel } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import { hash } from 'bcryptjs';
 
 //  seeding, using direct TCP connection with adapter
 const connectionString = process.env.DATABASE_URL!.includes('prisma+postgres')
@@ -20,7 +21,16 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // therapy session transcripts
-const transcripts = [
+type TranscriptSeed = {
+  concept: string;
+  duration: number;
+  transcript: string;
+  riskLevel: RiskLevel;
+  riskQuote?: string;
+  riskReason?: string;
+};
+
+const transcripts: TranscriptSeed[] = [
   {
     concept: 'Growth Mindset',
     duration: 52,
@@ -736,150 +746,134 @@ const transcripts = [
 async function main() {
   console.log('Starting seed...');
 
-  // create Fellows
-  const fellows = await Promise.all([
-    prisma.fellow.create({
-      data: {
-        name: 'Sarah Kamau',
-        email: 'sarah.kamau@shamiri.co',
-        age: 21,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'James Omondi',
-        email: 'james.omondi@shamiri.co',
-        age: 20,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Maria Wanjiku',
-        email: 'maria.wanjiku@shamiri.co',
-        age: 22,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'David Kipchoge',
-        email: 'david.kipchoge@shamiri.co',
-        age: 19,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Lisa Achieng',
-        email: 'lisa.achieng@shamiri.co',
-        age: 21,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Emma Njeri',
-        email: 'emma.njeri@shamiri.co',
-        age: 20,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Michael Mwangi',
-        email: 'michael.mwangi@shamiri.co',
-        age: 22,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Rachel Adhiambo',
-        email: 'rachel.adhiambo@shamiri.co',
-        age: 21,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Alex Kimani',
-        email: 'alex.kimani@shamiri.co',
-        age: 20,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Tom Otieno',
-        email: 'tom.otieno@shamiri.co',
-        age: 19,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Sophie Wambui',
-        email: 'sophie.wambui@shamiri.co',
-        age: 21,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Kenya Mutua',
-        email: 'kenya.mutua@shamiri.co',
-        age: 22,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Marcus Odhiambo',
-        email: 'marcus.odhiambo@shamiri.co',
-        age: 20,
-      },
-    }),
-    prisma.fellow.create({
-      data: {
-        name: 'Nina Chebet',
-        email: 'nina.chebet@shamiri.co',
-        age: 21,
-      },
-    }),
-  ]);
+  // create seeded supervisor account (idempotent)
+  const seededSupervisor = await prisma.supervisor.upsert({
+    where: { email: 'espiramarvin@gmail.com' },
+    create: {
+      username: 'Marvin Espira',
+      email: 'espiramarvin@gmail.com',
+      passwordHash: await hash('12345678', 10),
+    },
+    update: {
+      username: 'Marvin Espira',
+      passwordHash: await hash('12345678', 10),
+    },
+  });
 
-  // create sessions with transcripts
-  const sessions = [];
-  for (let i = 0; i < transcripts.length; i++) {
-    const transcript = transcripts[i];
-    const fellow = fellows[i % fellows.length];
+  console.log(`Seeded supervisor: ${seededSupervisor.username}`);
 
-    // status based on risk level
-    let status: SessionStatus = SessionStatus.PROCESSED;
-    if (transcript.riskLevel === RiskLevel.RISK) {
-      status = SessionStatus.FLAGGED_FOR_REVIEW;
-    }
+  // create Fellows (idempotent) and assign to supervisor
+  const fellowSeedData = [
+    { name: 'Sarah Kamau', email: 'sarah.kamau@shamiri.co', age: 21 },
+    { name: 'James Omondi', email: 'james.omondi@shamiri.co', age: 20 },
+    { name: 'Maria Wanjiku', email: 'maria.wanjiku@shamiri.co', age: 22 },
+    { name: 'David Kipchoge', email: 'david.kipchoge@shamiri.co', age: 19 },
+    { name: 'Lisa Achieng', email: 'lisa.achieng@shamiri.co', age: 21 },
+    { name: 'Emma Njeri', email: 'emma.njeri@shamiri.co', age: 20 },
+    { name: 'Michael Mwangi', email: 'michael.mwangi@shamiri.co', age: 22 },
+    {
+      name: 'Rachel Adhiambo',
+      email: 'rachel.adhiambo@shamiri.co',
+      age: 21,
+    },
+    { name: 'Alex Kimani', email: 'alex.kimani@shamiri.co', age: 20 },
+    { name: 'Tom Otieno', email: 'tom.otieno@shamiri.co', age: 19 },
+    { name: 'Sophie Wambui', email: 'sophie.wambui@shamiri.co', age: 21 },
+    { name: 'Kenya Mutua', email: 'kenya.mutua@shamiri.co', age: 22 },
+    { name: 'Marcus Odhiambo', email: 'marcus.odhiambo@shamiri.co', age: 20 },
+    { name: 'Nina Chebet', email: 'nina.chebet@shamiri.co', age: 21 },
+  ] as const;
 
-    const session = await prisma.session.create({
-      data: {
-        groupId: `GRP-${String(i + 1).padStart(3, '0')}`,
-        date: new Date(2026, 1, 16 - i), // recent dates
-        transcript: transcript.transcript,
-        duration: transcript.duration,
-        concept: transcript.concept,
-        status: status,
-        fellowId: fellow.id,
-      },
-    });
-
-    sessions.push(session);
-  }
-
-  console.log(`Created ${sessions.length} sessions`);
-
-  // create AI Analysis for the RISK session
-  // session with depression topic
-  const riskSession = sessions.find(
-    (s, i) => transcripts[i].riskLevel === RiskLevel.RISK,
+  const fellows = await Promise.all(
+    fellowSeedData.map((f) =>
+      prisma.fellow.upsert({
+        where: { email: f.email },
+        create: {
+          name: f.name,
+          email: f.email,
+          age: f.age,
+          supervisorId: seededSupervisor.id,
+        },
+        update: {
+          name: f.name,
+          age: f.age,
+          supervisorId: seededSupervisor.id,
+        },
+      }),
+    ),
   );
 
-  if (riskSession) {
-    const riskTranscript = transcripts.find(
+  // create sessions with transcripts
+  let sessions = await prisma.session.findMany({
+    where: {
+      groupId: {
+        startsWith: 'GRP-',
+      },
+    },
+    orderBy: { groupId: 'asc' },
+  });
+
+  if (sessions.length < transcripts.length) {
+    console.log('Creating sessions from transcripts…');
+    const created: typeof sessions = [];
+
+    for (let i = 0; i < transcripts.length; i++) {
+      const transcript = transcripts[i];
+      const fellow = fellows[i % fellows.length];
+      const groupId = `GRP-${String(i + 1).padStart(3, '0')}`;
+
+      if (sessions.some((s) => s.groupId === groupId)) continue;
+
+      // status based on risk level
+      let status: SessionStatus = SessionStatus.PROCESSED;
+      if (transcript.riskLevel === RiskLevel.RISK) {
+        status = SessionStatus.FLAGGED_FOR_REVIEW;
+      }
+
+      const session = await prisma.session.create({
+        data: {
+          groupId,
+          date: new Date(2026, 1, 16 - i),
+          transcript: transcript.transcript,
+          duration: transcript.duration,
+          concept: transcript.concept,
+          status,
+          fellowId: fellow.id,
+        },
+      });
+      created.push(session);
+    }
+
+    sessions = [...sessions, ...created].sort((a, b) =>
+      a.groupId.localeCompare(b.groupId),
+    );
+  } else {
+    console.log(
+      `Seed found ${sessions.length} existing sessions; will upsert analyses.`,
+    );
+  }
+
+  console.log(`Ensured ${sessions.length} sessions`);
+
+    // create AI Analysis for the RISK session
+    // session with depression topic
+    const riskIndex = transcripts.findIndex(
       (t) => t.riskLevel === RiskLevel.RISK,
     );
+    const riskGroupId =
+      riskIndex >= 0 ? `GRP-${String(riskIndex + 1).padStart(3, '0')}` : null;
+    const riskSession = riskGroupId
+      ? sessions.find((s) => s.groupId === riskGroupId)
+      : undefined;
 
-    await prisma.analysis.create({
-      data: {
+    if (riskSession) {
+      const riskTranscript = transcripts.find(
+        (t) => t.riskLevel === RiskLevel.RISK,
+      );
+
+    await prisma.analysis.upsert({
+      where: { sessionId: riskSession.id },
+      create: {
         sessionId: riskSession.id,
         overallSummary:
           'Fellow Marcus conducted a session on coping with depression, demonstrating appropriate concern and professional boundaries. A participant disclosed suicidal ideation, which the Fellow handled correctly by expressing concern and committing to connect them with professional support.',
@@ -906,47 +900,128 @@ async function main() {
         modelUsed: 'gpt-5.1',
         processingTime: 3500,
       },
-    });
-
-    console.log('Created alysis with RISK flag for session on depression');
-  }
-
-  // create analyses for a few other sessions
-  // SAFE risk level sesssions
-  const sessionsToAnalyze = sessions
-    .slice(0, 5)
-    .filter((s) => s.id !== riskSession?.id);
-
-  for (const session of sessionsToAnalyze) {
-    const isPoorSession =
-      session.concept === 'Growth Mindset' && session.duration === 45;
-
-    await prisma.analysis.create({
-      data: {
-        sessionId: session.id,
-        overallSummary: isPoorSession
-          ? `Fellow delivered a basic session on ${session.concept} but lacked depth and engagement. Participants asked questions showing interest, but the Fellow's brief responses and superficial coverage limited learning. More thorough explanations and interactive activities are needed.`
-          : `Fellow delivered a comprehensive session on ${session.concept}. Participants were engaged and demonstrated understanding through active participation. The Fellow used evidence-based techniques and created a safe, supportive environment for learning.`,
-        contentCoverageScore: isPoorSession ? 2 : 3,
-        contentCoverageJustification: isPoorSession
-          ? 'Fellow mentioned growth mindset and added "yet" to statements, but explanations were superficial and rushed. Limited examples and no depth when participants asked for elaboration. Concept was introduced but not fully taught.'
-          : `Fellow clearly explained ${session.concept} with relevant examples, checked for understanding, and ensured participants could apply the concept. Comprehensive coverage with practical applications.`,
-        contentCoverageQuotes: isPoorSession
-          ? '"Growth mindset is about believing you can improve through effort..."\n"Just add \'yet\' to things. Like I can\'t do this YET..."\n"That\'s basically it."'
-          : `"Let me explain ${session.concept} clearly..."\n"Can anyone give me an example of this?"\n"How would you apply this in your own life?"`,
-        facilitationQualityScore: isPoorSession ? 2 : 3,
-        facilitationQualityJustification: isPoorSession
-          ? 'Fellow was polite but somewhat transactional. Responses to participant questions were brief without deeper engagement. Followed a script without adapting to participant needs or expanding on topics.'
-          : 'Fellow was warm and engaging, asked open-ended questions, validated participant contributions, and encouraged everyone to share. Created a safe, supportive environment for learning.',
-        facilitationQualityQuotes: isPoorSession
-          ? '"Okay..."\n"Yeah, so like, if you\'re bad at something, you can get better."\n"Does anyone have something they\'re bad at?"'
-          : '"Thank you for sharing that!"\n"That\'s a great example. What made you think of that?"\n"How does everyone feel about what we\'ve discussed?"',
+      update: {
+        overallSummary:
+          'Fellow Marcus conducted a session on coping with depression, demonstrating appropriate concern and professional boundaries. A participant disclosed suicidal ideation, which the Fellow handled correctly by expressing concern and committing to connect them with professional support.',
+        contentCoverageScore: 3,
+        contentCoverageJustification:
+          'Fellow effectively taught depression coping strategies including behavioral activation, challenging negative thoughts, maintaining routine, social connection, and self-compassion. Content was comprehensive and evidence-based.',
+        contentCoverageQuotes:
+          '"Today we\'re talking about depression and coping strategies..."\n"Behavioral activation means doing small activities even when you don\'t feel like it..."\n"Depression tells you lies: I\'m worthless, Nothing will get better, No one cares."',
+        facilitationQualityScore: 3,
+        facilitationQualityJustification:
+          'Fellow demonstrated excellent facilitation skills with warm, empathetic tone. Created safe space for vulnerable sharing and validated participant emotions. Used open-ended questions effectively.',
+        facilitationQualityQuotes:
+          '"Thank you for trusting us with that. Those thoughts are serious..."\n"Your feelings are not a burden..."\n"What do you think about these coping strategies?"',
         protocolSafetyScore: 3,
         protocolSafetyJustification:
-          'Fellow stayed focused on the assigned curriculum topic throughout the session. No medical advice, diagnoses, or unauthorized recommendations were made. Handled all discussions appropriately within the Shamiri protocol.',
-        protocolSafetyQuotes: isPoorSession
-          ? `"Today we\'re talking about ${session.concept}..."\n"Let\'s stick to what we\'re learning today."`
-          : `"This is about ${session.concept}, which is part of our Shamiri curriculum..."\n"Remember, we\'re focusing on evidence-based strategies here."`,
+          'Fellow demonstrated excellent protocol adherence by recognizing the limits of lay provider role and immediately committing to connect at-risk participant with professional counselor. Did not attempt to provide medical advice.',
+        protocolSafetyQuotes:
+          '"These thoughts are serious, and I\'m concerned about you. Those are thoughts we need to address with professional help..."\n"After our session, I\'m going to connect you with our counselor, okay?"',
+        safetyFlag: false,
+        riskLevel: RiskLevel.RISK,
+        riskQuote: riskTranscript?.riskQuote ?? '',
+        riskReason: riskTranscript?.riskReason ?? '',
+        generatedAt: new Date(),
+        modelUsed: 'gpt-5.1',
+        processingTime: 3500,
+      },
+    });
+
+      console.log('Created alysis with RISK flag for session on depression');
+    }
+
+    // create analyses for a few other sessions
+    // SAFE risk level sesssions
+    const sessionsToAnalyze = sessions
+      .slice(0, 5)
+      .filter((s) => s.id !== riskSession?.id);
+
+  for (const session of sessionsToAnalyze) {
+    const isPoorGrowthMindset =
+      session.concept === 'Growth Mindset' && session.duration === 45;
+    const isMariaSelfCompassion = session.groupId === 'GRP-003';
+
+    const analysisSeed =
+      isMariaSelfCompassion
+        ? {
+            overallSummary:
+              'Fellow Maria introduced self-compassion clearly, but the session lacked consistent engagement and opportunities to check understanding across the group. Delivery was mostly lecture-style with limited participant-led discussion, though boundaries and protocol were maintained.',
+            contentCoverageScore: 2,
+            contentCoverageJustification:
+              'Maria defined self-compassion and named key components, but moved through the material quickly without broadly checking understanding or using multiple concrete examples. The main practice moment focused on one participant, and the session could have benefited from more group reflection and application.',
+            contentCoverageQuotes:
+              '"Self-compassion means treating yourself with the same kindness and understanding that you would offer to a good friend."\n"Dr. Kristin Neff, a researcher, says self-compassion has three parts: self-kindness, common humanity, and mindfulness."\n"Your homework is to notice when you\'re being self-critical this week, and practice responding with self-compassion instead."',
+            facilitationQualityScore: 1,
+            facilitationQualityJustification:
+              'Facilitation was mostly didactic, with long stretches of Fellow talk and limited open-ended group discussion. Questions were directed to individual participants rather than inviting broader participation, and the session felt more like a lecture than an interactive group conversation.',
+            facilitationQualityQuotes:
+              '"Dr. Kristin Neff, a researcher, says self-compassion has three parts..."\n"Many of us are very hard on ourselves."\n"Then replace that critical thought with a compassionate one."',
+            protocolSafetyScore: 3,
+            protocolSafetyJustification:
+              'Maria stayed within lay-provider boundaries by teaching skills and reflective exercises without diagnosing, prescribing, or giving medical advice. The session remained focused on the curriculum topic and used appropriate, non-clinical guidance.',
+            protocolSafetyQuotes:
+              '"Self-compassion means treating yourself with the same kindness..."\n"It takes practice, but our brains can learn new patterns."\n"Your homework is to notice when you\'re being self-critical..."',
+          }
+        : {
+            overallSummary: isPoorGrowthMindset
+              ? `Fellow delivered a basic session on ${session.concept} but lacked depth and engagement. Participants asked questions showing interest, but the Fellow's brief responses and superficial coverage limited learning. More thorough explanations and interactive activities are needed.`
+              : `Fellow delivered a comprehensive session on ${session.concept}. Participants were engaged and demonstrated understanding through active participation. The Fellow used evidence-based techniques and created a safe, supportive environment for learning.`,
+            contentCoverageScore: isPoorGrowthMindset ? 2 : 3,
+            contentCoverageJustification: isPoorGrowthMindset
+              ? 'Fellow mentioned growth mindset and added "yet" to statements, but explanations were superficial and rushed. Limited examples and no depth when participants asked for elaboration. Concept was introduced but not fully taught.'
+              : `Fellow clearly explained ${session.concept} with relevant examples, checked for understanding, and ensured participants could apply the concept. Comprehensive coverage with practical applications.`,
+            contentCoverageQuotes: isPoorGrowthMindset
+              ? '"Growth mindset is about believing you can improve through effort..."\n"Just add \'yet\' to things. Like I can\'t do this YET..."\n"That\'s basically it."'
+              : `"Let me explain ${session.concept} clearly..."\n"Can anyone give me an example of this?"\n"How would you apply this in your own life?"`,
+            facilitationQualityScore: isPoorGrowthMindset ? 2 : 3,
+            facilitationQualityJustification: isPoorGrowthMindset
+              ? 'Fellow was polite but somewhat transactional. Responses to participant questions were brief without deeper engagement. Followed a script without adapting to participant needs or expanding on topics.'
+              : 'Fellow was warm and engaging, asked open-ended questions, validated participant contributions, and encouraged everyone to share. Created a safe, supportive environment for learning.',
+            facilitationQualityQuotes: isPoorGrowthMindset
+              ? '"Okay..."\n"Yeah, so like, if you\'re bad at something, you can get better."\n"Does anyone have something they\'re bad at?"'
+              : '"Thank you for sharing that!"\n"That\'s a great example. What made you think of that?"\n"How does everyone feel about what we\'ve discussed?"',
+            protocolSafetyScore: 3,
+            protocolSafetyJustification:
+              'Fellow stayed focused on the assigned curriculum topic throughout the session. No medical advice, diagnoses, or unauthorized recommendations were made. Handled all discussions appropriately within the Shamiri protocol.',
+            protocolSafetyQuotes: isPoorGrowthMindset
+              ? `"Today we\'re talking about ${session.concept}..."\n"Let\'s stick to what we\'re learning today."`
+              : `"This is about ${session.concept}, which is part of our Shamiri curriculum..."\n"Remember, we\'re focusing on evidence-based strategies here."`,
+          };
+
+    await prisma.analysis.upsert({
+      where: { sessionId: session.id },
+      create: {
+        sessionId: session.id,
+        overallSummary: analysisSeed.overallSummary,
+        contentCoverageScore: analysisSeed.contentCoverageScore,
+        contentCoverageJustification: analysisSeed.contentCoverageJustification,
+        contentCoverageQuotes: analysisSeed.contentCoverageQuotes,
+        facilitationQualityScore: analysisSeed.facilitationQualityScore,
+        facilitationQualityJustification: analysisSeed.facilitationQualityJustification,
+        facilitationQualityQuotes: analysisSeed.facilitationQualityQuotes,
+        protocolSafetyScore: analysisSeed.protocolSafetyScore,
+        protocolSafetyJustification: analysisSeed.protocolSafetyJustification,
+        protocolSafetyQuotes: analysisSeed.protocolSafetyQuotes,
+        safetyFlag: false,
+        riskLevel: RiskLevel.SAFE,
+        riskQuote: null,
+        riskReason: null,
+        generatedAt: new Date(),
+        modelUsed: 'gpt-5.1',
+        processingTime: 2800,
+      },
+      update: {
+        overallSummary: analysisSeed.overallSummary,
+        contentCoverageScore: analysisSeed.contentCoverageScore,
+        contentCoverageJustification: analysisSeed.contentCoverageJustification,
+        contentCoverageQuotes: analysisSeed.contentCoverageQuotes,
+        facilitationQualityScore: analysisSeed.facilitationQualityScore,
+        facilitationQualityJustification: analysisSeed.facilitationQualityJustification,
+        facilitationQualityQuotes: analysisSeed.facilitationQualityQuotes,
+        protocolSafetyScore: analysisSeed.protocolSafetyScore,
+        protocolSafetyJustification: analysisSeed.protocolSafetyJustification,
+        protocolSafetyQuotes: analysisSeed.protocolSafetyQuotes,
         safetyFlag: false,
         riskLevel: RiskLevel.SAFE,
         riskQuote: null,
@@ -959,7 +1034,6 @@ async function main() {
   }
 
   console.log(`Created ${sessionsToAnalyze.length + 1} AI Analyses`);
-
   console.log('Seed completed successfully!');
 }
 
@@ -970,4 +1044,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

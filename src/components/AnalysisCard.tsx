@@ -210,7 +210,7 @@ export default function AnalysisCard({ analysis }: AnalysisCardProps) {
         {/* session metrics */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-900 border-b pb-2">
-            3-Point Quality Index
+            Shamiri Quality Index
           </h3>
 
           {/* metric 1: content coverage */}

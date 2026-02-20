@@ -1,4 +1,15 @@
 import { render, screen } from '@testing-library/react';
+
+// mock auth to avoid loading jose (ESM) in Jest environment
+jest.mock('@/lib/auth/server', () => ({
+  __esModule: true,
+  requireSupervisorSession: jest.fn(async () => ({
+    supervisorId: 'sup-1',
+    username: 'Marvin Espira',
+    email: 'espiramarvin@gmail.com',
+  })),
+}));
+
 import DashboardPage from '@/app/page';
 
 // mock Next.js Link component
@@ -217,7 +228,9 @@ describe('DashboardPage', () => {
       render(component);
 
       // assert - check processed count is 3
-      const processedLabel = screen.getByText('Processed');
+      const processedLabel = screen.getByText('Processed', {
+        selector: 'div.text-sm.font-medium.text-gray-600',
+      });
       const processedCard = processedLabel.closest('.bg-white.rounded-lg');
       const countElement = processedCard?.querySelector('.text-3xl.font-bold');
       expect(countElement).toHaveTextContent('3');
@@ -245,7 +258,9 @@ describe('DashboardPage', () => {
       render(component);
 
       // assert - check flagged count is 3
-      const flaggedLabel = screen.getByText('Flagged for Review');
+      const flaggedLabel = screen.getByText('Flagged for Review', {
+        selector: 'div.text-sm.font-medium.text-gray-600',
+      });
       const flaggedCard = flaggedLabel.closest('.bg-white.rounded-lg');
       const countElement = flaggedCard?.querySelector('.text-3xl.font-bold');
       expect(countElement).toHaveTextContent('3');
@@ -274,10 +289,98 @@ describe('DashboardPage', () => {
       render(component);
 
       // assert - check safe count is 4
-      const safeLabel = screen.getByText('Safe');
+      const safeLabel = screen.getByText('Safe', {
+        selector: 'div.text-sm.font-medium.text-gray-600',
+      });
       const safeCard = safeLabel.closest('.bg-white.rounded-lg');
       const countElement = safeCard?.querySelector('.text-3xl.font-bold');
       expect(countElement).toHaveTextContent('4');
+    });
+  });
+
+  describe('Filtering', () => {
+    it('should filter table by status=PROCESSED', async () => {
+      const mockSessions = [
+        {
+          id: 's-1',
+          groupId: 'GRP-001',
+          date: new Date('2026-02-15'),
+          transcript: 'Test transcript',
+          duration: 45,
+          concept: 'Growth Mindset',
+          status: 'PROCESSED',
+          fellowId: 'fellow-1',
+          fellow: {
+            id: 'fellow-1',
+            name: 'Sarah Kamau',
+            email: 'sarah.kamau@shamiri.co',
+            age: 21,
+          },
+          analysis: null,
+          _count: { feedback: 0 },
+        },
+        {
+          id: 's-2',
+          groupId: 'GRP-002',
+          date: new Date('2026-02-14'),
+          transcript: 'Test transcript 2',
+          duration: 50,
+          concept: 'Gratitude Practice',
+          status: 'PROCESSED',
+          fellowId: 'fellow-2',
+          fellow: {
+            id: 'fellow-2',
+            name: 'James Omondi',
+            email: 'james.omondi@shamiri.co',
+            age: 20,
+          },
+          analysis: null,
+          _count: { feedback: 1 },
+        },
+      ];
+
+      const mockAllSessions = [
+        { status: 'PROCESSED' },
+        { status: 'SAFE' },
+        { status: 'FLAGGED_FOR_REVIEW' },
+        { status: 'PROCESSED' },
+        { status: 'SAFE' },
+      ];
+
+      (prisma.session.findMany as jest.Mock)
+        .mockResolvedValueOnce(mockSessions) // filtered paginated sessions
+        .mockResolvedValueOnce(mockAllSessions); // all sessions for stats
+
+      (prisma.session.count as jest.Mock)
+        .mockResolvedValueOnce(2) // filteredCount
+        .mockResolvedValueOnce(5); // totalCount
+
+      const component = await DashboardPage({
+        searchParams: Promise.resolve({ status: 'PROCESSED' }),
+      });
+      render(component);
+
+      // verify prisma query included status filter
+      const firstCallArg = (prisma.session.findMany as jest.Mock).mock
+        .calls[0][0];
+      expect(firstCallArg).toEqual(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'PROCESSED' }),
+        }),
+      );
+
+      // verify table shows only processed status badges
+      const processedBadges = screen.getAllByText('Processed', {
+        selector: 'span',
+      });
+      expect(processedBadges.length).toBeGreaterThanOrEqual(2);
+
+      expect(
+        screen.queryByText('Flagged for Review', { selector: 'span' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Safe', { selector: 'span' }),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -305,9 +408,21 @@ describe('DashboardPage', () => {
       expect(
         screen.getAllByText('Total Sessions').length,
       ).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Processed')).toBeInTheDocument();
-      expect(screen.getByText('Flagged for Review')).toBeInTheDocument();
-      expect(screen.getByText('Safe')).toBeInTheDocument();
+      expect(
+        screen.getByText('Processed', {
+          selector: 'div.text-sm.font-medium.text-gray-600',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Flagged for Review', {
+          selector: 'div.text-sm.font-medium.text-gray-600',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Safe', {
+          selector: 'div.text-sm.font-medium.text-gray-600',
+        }),
+      ).toBeInTheDocument();
     });
   });
 });

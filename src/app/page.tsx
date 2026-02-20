@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
+import { requireSupervisorSession } from '@/lib/auth/server';
 
 type SessionStatus =
   | 'PROCESSED'
@@ -35,11 +36,67 @@ export const dynamic = 'force-dynamic';
 
 const ITEMS_PER_PAGE = 10;
 
-async function getSessions(page: number = 1) {
+function normalizeSearchQuery(value: unknown) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, 100);
+}
+
+function normalizeStatusFilter(value: unknown): SessionStatus | 'ALL' {
+  if (value === 'PROCESSED') return 'PROCESSED';
+  if (value === 'FLAGGED_FOR_REVIEW') return 'FLAGGED_FOR_REVIEW';
+  if (value === 'SAFE') return 'SAFE';
+  if (value === 'NEEDS_FOLLOWUP') return 'NEEDS_FOLLOWUP';
+  return 'ALL';
+}
+
+async function getSessions(
+  supervisorId: string,
+  page: number = 1,
+  q: string = '',
+  status: SessionStatus | 'ALL' = 'ALL',
+) {
   const skip = (page - 1) * ITEMS_PER_PAGE;
 
-  const [sessions, totalCount, allSessions] = await Promise.all([
+  const baseWhere = {
+    fellow: {
+      supervisorId,
+    },
+  } as const;
+
+  // filter by fellow name or email
+  const filteredWhere =
+    q || status !== 'ALL'
+      ? {
+          ...baseWhere,
+          ...(status !== 'ALL' ? { status } : {}),
+          ...(q
+            ? {
+                OR: [
+                  {
+                    fellow: {
+                      name: {
+                        contains: q,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  },
+                  {
+                    fellow: {
+                      email: {
+                        contains: q,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  },
+                ],
+              }
+            : {}),
+        }
+      : baseWhere;
+
+  const [sessions, filteredCount, totalCount, allSessions] = await Promise.all([
     prisma.session.findMany({
+      where: filteredWhere,
       skip,
       take: ITEMS_PER_PAGE,
       include: {
@@ -53,8 +110,10 @@ async function getSessions(page: number = 1) {
         date: 'desc',
       },
     }),
-    prisma.session.count(),
+    prisma.session.count({ where: filteredWhere }),
+    prisma.session.count({ where: baseWhere }),
     prisma.session.findMany({
+      where: baseWhere,
       select: {
         status: true,
       },
@@ -74,7 +133,15 @@ async function getSessions(page: number = 1) {
       .length,
   };
 
-  return { sessions, totalCount, stats, currentPage: page };
+  return {
+    sessions,
+    filteredCount,
+    totalCount,
+    stats,
+    currentPage: page,
+    q,
+    status,
+  };
 }
 
 function getStatusColor(status: SessionStatus) {
@@ -110,18 +177,31 @@ function getStatusLabel(status: SessionStatus) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; status?: string }>;
 }) {
+  const supervisor = await requireSupervisorSession();
   const params = await searchParams;
   const currentPage = Number(params.page) || 1;
+  const q = normalizeSearchQuery(params.q);
+  const status = normalizeStatusFilter(params.status);
   const {
     sessions,
+    filteredCount,
     totalCount,
     stats,
     currentPage: page,
-  } = await getSessions(currentPage);
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  } = await getSessions(supervisor.supervisorId, currentPage, q, status);
+  const totalPages = Math.ceil(filteredCount / ITEMS_PER_PAGE);
   const skip = (page - 1) * ITEMS_PER_PAGE;
+
+  const hrefForPage = (pageNum: number) => {
+    const sp = new URLSearchParams();
+    if (q) sp.set('q', q);
+    if (status !== 'ALL') sp.set('status', status);
+    if (pageNum > 1) sp.set('page', String(pageNum));
+    const qs = sp.toString();
+    return qs ? `/?${qs}` : '/';
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -136,6 +216,10 @@ export default async function DashboardPage({
               <p className="mt-1 text-sm text-gray-600">
                 Review and monitor therapy sessions conducted by Fellows
               </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Signed in as{' '}
+                <span className="font-medium">{supervisor.username}</span>
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600">
@@ -147,6 +231,14 @@ export default async function DashboardPage({
                 </span>{' '}
                 Flagged
               </div>
+              <form action="/api/auth/logout" method="post" className="ml-2">
+                <button
+                  type="submit"
+                  className="text-sm text-gray-600 hover:text-gray-900 underline"
+                >
+                  Sign out
+                </button>
+              </form>
             </div>
           </div>
         </div>
@@ -189,9 +281,81 @@ export default async function DashboardPage({
         {/* Sessions Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Recent Sessions
-            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Recent Sessions
+                </h2>
+                {(q || status !== 'ALL') && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Showing <span className="font-medium">{filteredCount}</span>{' '}
+                    matching result{filteredCount === 1 ? '' : 's'}
+                  </p>
+                )}
+              </div>
+
+              <form
+                action="/"
+                method="get"
+                className="flex flex-col gap-2 sm:flex-row sm:items-end"
+              >
+                <div>
+                  <label
+                    htmlFor="q"
+                    className="block text-xs font-medium text-gray-600"
+                  >
+                    Search Fellow
+                  </label>
+                  <input
+                    id="q"
+                    name="q"
+                    defaultValue={q}
+                    placeholder="Name or email…"
+                    className="mt-1 w-full sm:w-64 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="status"
+                    className="block text-xs font-medium text-gray-600"
+                  >
+                    Status
+                  </label>
+                  <select
+                    id="status"
+                    name="status"
+                    defaultValue={status}
+                    className="mt-1 w-full sm:w-56 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="ALL">All statuses</option>
+                    <option value="PROCESSED">Processed</option>
+                    <option value="FLAGGED_FOR_REVIEW">
+                      Flagged for Review
+                    </option>
+                    <option value="SAFE">Safe</option>
+                    <option value="NEEDS_FOLLOWUP">Needs Follow-up</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                  >
+                    Apply
+                  </button>
+                  {(q || status !== 'ALL') && (
+                    <Link
+                      href="/"
+                      className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Clear
+                    </Link>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -315,7 +479,7 @@ export default async function DashboardPage({
               <div className="flex-1 flex justify-between sm:hidden">
                 {/* mobile screen pagination */}
                 <Link
-                  href={`/?page=${page - 1}`}
+                  href={hrefForPage(page - 1)}
                   className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
                     page <= 1
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
@@ -325,7 +489,7 @@ export default async function DashboardPage({
                   Previous
                 </Link>
                 <Link
-                  href={`/?page=${page + 1}`}
+                  href={hrefForPage(page + 1)}
                   className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
                     page >= totalPages
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
@@ -341,10 +505,10 @@ export default async function DashboardPage({
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">{skip + 1}</span> to{' '}
                     <span className="font-medium">
-                      {Math.min(skip + ITEMS_PER_PAGE, totalCount)}
+                      {Math.min(skip + ITEMS_PER_PAGE, filteredCount)}
                     </span>{' '}
-                    of <span className="font-medium">{totalCount}</span>{' '}
-                    sessions
+                    of <span className="font-medium">{filteredCount}</span>{' '}
+                    result{filteredCount === 1 ? '' : 's'}
                   </p>
                 </div>
                 <div>
@@ -354,7 +518,7 @@ export default async function DashboardPage({
                   >
                     {/* prev btn */}
                     <Link
-                      href={`/?page=${page - 1}`}
+                      href={hrefForPage(page - 1)}
                       className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
                         page <= 1
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
@@ -406,7 +570,7 @@ export default async function DashboardPage({
                         return (
                           <Link
                             key={pageNum}
-                            href={`/?page=${pageNum}`}
+                            href={hrefForPage(pageNum)}
                             className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                               pageNum === page
                                 ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
@@ -421,7 +585,7 @@ export default async function DashboardPage({
 
                     {/* next btn */}
                     <Link
-                      href={`/?page=${page + 1}`}
+                      href={hrefForPage(page + 1)}
                       className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
                         page >= totalPages
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none'
