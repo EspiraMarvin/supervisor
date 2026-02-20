@@ -15,9 +15,29 @@ model Fellow {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  supervisorId String?
+  supervisor   Supervisor? @relation(fields: [supervisorId], references: [id], onDelete: SetNull)
+
   sessions Session[]
 
+  @@index([supervisorId])
   @@map("fellows")
+}
+
+// supervisors who oversee fellows
+model Supervisor {
+  id           String @id @default(cuid())
+  username     String
+  email        String @unique
+  passwordHash String
+
+  fellows   Fellow[]
+  feedbacks Feedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("supervisors")
 }
 
 // therapy sessions conducted by fellows
@@ -101,8 +121,9 @@ model Feedback {
   overrideRisk   RiskLevel?
 
   // supervisor notes
-  notes          String? @db.Text
-  supervisorName String
+  notes        String?     @db.Text
+  superVisorId String?
+  supervisor   Supervisor? @relation(fields: [superVisorId], references: [id], onDelete: SetNull)
 
   sessionId String
   session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -111,6 +132,7 @@ model Feedback {
   updatedAt DateTime @updatedAt
 
   @@index([sessionId])
+  @@index([superVisorId])
   @@map("feedback")
 }
 

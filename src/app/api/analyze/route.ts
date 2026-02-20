@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { generateAnalysis } from '@/lib/ai-analysis';
+import { getSupervisorSessionFromRequest } from '@/lib/auth/request';
 
 // Mark this route as dynamic to prevent build-time execution
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const supervisorSession = await getSupervisorSessionFromRequest(request);
+    if (!supervisorSession) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { sessionId } = body;
 
@@ -15,8 +21,13 @@ export async function POST(request: NextRequest) {
     }
 
     // get session with transcript
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
+    const session = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        fellow: {
+          supervisorId: supervisorSession.supervisorId,
+        },
+      },
       include: { fellow: true },
     });
 

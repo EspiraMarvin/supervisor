@@ -7,11 +7,13 @@ import { SessionStatus, RiskLevel } from '@prisma/client';
 interface FeedbackFormProps {
   sessionId: string;
   currentStatus: SessionStatus;
+  supervisorName: string;
 }
 
 export default function FeedbackForm({
   sessionId,
   currentStatus,
+  supervisorName,
 }: FeedbackFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,7 +22,6 @@ export default function FeedbackForm({
   const [overrideStatus, setOverrideStatus] = useState<SessionStatus | ''>('');
   const [overrideRisk, setOverrideRisk] = useState<RiskLevel | ''>('');
   const [notes, setNotes] = useState('');
-  const [supervisorName, setSupervisorName] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +40,6 @@ export default function FeedbackForm({
           overrideStatus: overrideStatus || null,
           overrideRisk: overrideRisk || null,
           notes,
-          supervisorName,
         }),
       });
 
@@ -53,7 +53,6 @@ export default function FeedbackForm({
       setOverrideStatus('');
       setOverrideRisk('');
       setNotes('');
-      setSupervisorName('');
 
       // refresh the page to show updated feedback
       router.refresh();
@@ -70,22 +69,20 @@ export default function FeedbackForm({
         Supervisor Review
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* supervisor name */}
+        {/* supervisor name (derived from authenticated session) */}
         <div>
           <label
             htmlFor="supervisorName"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Your Name *
+            Supervisor
           </label>
           <input
             type="text"
             id="supervisorName"
             value={supervisorName}
-            onChange={(e) => setSupervisorName(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-gray-700 text-sm"
-            placeholder="Enter your name"
+            readOnly
+            className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700 text-sm"
           />
         </div>
 
@@ -180,7 +177,7 @@ export default function FeedbackForm({
         {/* submit btn   */}
         <button
           type="submit"
-          disabled={isSubmitting || !supervisorName}
+          disabled={isSubmitting}
           className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Review'}
