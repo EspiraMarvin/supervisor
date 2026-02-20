@@ -21,7 +21,16 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // therapy session transcripts
-const transcripts = [
+type TranscriptSeed = {
+  concept: string;
+  duration: number;
+  transcript: string;
+  riskLevel: RiskLevel;
+  riskQuote?: string;
+  riskReason?: string;
+};
+
+const transcripts: TranscriptSeed[] = [
   {
     concept: 'Growth Mindset',
     duration: 52,
@@ -737,7 +746,7 @@ const transcripts = [
 async function main() {
   console.log('Starting seed...');
 
-  // create seeded supervisor account
+  // create seeded supervisor account (idempotent)
   const seededSupervisor = await prisma.supervisor.upsert({
     where: { email: 'espiramarvin@gmail.com' },
     create: {
@@ -753,7 +762,7 @@ async function main() {
 
   console.log(`Seeded supervisor: ${seededSupervisor.username}`);
 
-  // create Fellows
+  // create Fellows (idempotent) and assign to supervisor
   const fellowSeedData = [
     { name: 'Sarah Kamau', email: 'sarah.kamau@shamiri.co', age: 21 },
     { name: 'James Omondi', email: 'james.omondi@shamiri.co', age: 20 },
@@ -794,6 +803,7 @@ async function main() {
     ),
   );
 
+  // create sessions with transcripts
   let sessions = await prisma.session.findMany({
     where: {
       groupId: {
@@ -803,7 +813,6 @@ async function main() {
     orderBy: { groupId: 'asc' },
   });
 
-  // create sessions with transcripts (only if missing)
   if (sessions.length < transcripts.length) {
     console.log('Creating sessions from transcripts…');
     const created: typeof sessions = [];
@@ -813,8 +822,7 @@ async function main() {
       const fellow = fellows[i % fellows.length];
       const groupId = `GRP-${String(i + 1).padStart(3, '0')}`;
 
-      const existing = sessions.find((s) => s.groupId === groupId);
-      if (existing) continue;
+      if (sessions.some((s) => s.groupId === groupId)) continue;
 
       // status based on risk level
       let status: SessionStatus = SessionStatus.PROCESSED;
@@ -825,7 +833,7 @@ async function main() {
       const session = await prisma.session.create({
         data: {
           groupId,
-          date: new Date(2026, 1, 16 - i), // recent dates
+          date: new Date(2026, 1, 16 - i),
           transcript: transcript.transcript,
           duration: transcript.duration,
           concept: transcript.concept,
@@ -833,7 +841,6 @@ async function main() {
           fellowId: fellow.id,
         },
       });
-
       created.push(session);
     }
 
@@ -846,18 +853,23 @@ async function main() {
     );
   }
 
-  console.log(`Created ${sessions.length} sessions`);
+  console.log(`Ensured ${sessions.length} sessions`);
 
-  // create AI Analysis for the RISK session
-  // session with depression topic
-  const riskSession = sessions.find(
-    (s, i) => transcripts[i].riskLevel === RiskLevel.RISK,
-  );
-
-  if (riskSession) {
-    const riskTranscript = transcripts.find(
+    // create AI Analysis for the RISK session
+    // session with depression topic
+    const riskIndex = transcripts.findIndex(
       (t) => t.riskLevel === RiskLevel.RISK,
     );
+    const riskGroupId =
+      riskIndex >= 0 ? `GRP-${String(riskIndex + 1).padStart(3, '0')}` : null;
+    const riskSession = riskGroupId
+      ? sessions.find((s) => s.groupId === riskGroupId)
+      : undefined;
+
+    if (riskSession) {
+      const riskTranscript = transcripts.find(
+        (t) => t.riskLevel === RiskLevel.RISK,
+      );
 
     await prisma.analysis.upsert({
       where: { sessionId: riskSession.id },
@@ -908,22 +920,22 @@ async function main() {
           '"These thoughts are serious, and I\'m concerned about you. Those are thoughts we need to address with professional help..."\n"After our session, I\'m going to connect you with our counselor, okay?"',
         safetyFlag: false,
         riskLevel: RiskLevel.RISK,
-        riskQuote: riskTranscript?.riskQuote || '',
-        riskReason: riskTranscript?.riskReason || '',
+        riskQuote: riskTranscript?.riskQuote ?? '',
+        riskReason: riskTranscript?.riskReason ?? '',
         generatedAt: new Date(),
         modelUsed: 'gpt-5.1',
         processingTime: 3500,
       },
     });
 
-    console.log('Created alysis with RISK flag for session on depression');
-  }
+      console.log('Created alysis with RISK flag for session on depression');
+    }
 
-  // create analyses for a few other sessions
-  // SAFE risk level sesssions
-  const sessionsToAnalyze = sessions
-    .slice(0, 5)
-    .filter((s) => s.id !== riskSession?.id);
+    // create analyses for a few other sessions
+    // SAFE risk level sesssions
+    const sessionsToAnalyze = sessions
+      .slice(0, 5)
+      .filter((s) => s.id !== riskSession?.id);
 
   for (const session of sessionsToAnalyze) {
     const isPoorGrowthMindset =
@@ -1022,7 +1034,6 @@ async function main() {
   }
 
   console.log(`Created ${sessionsToAnalyze.length + 1} AI Analyses`);
-
   console.log('Seed completed successfully!');
 }
 
